@@ -42,10 +42,23 @@ def fetch(cfg, out: Path, store: str = ARCO_STORE) -> Path:
         latitude=slice(region["lat_max"], region["lat_min"]),
         longitude=slice(region["lon_min"] % 360, region["lon_max"] % 360),
     )
-    print(f"[fetch] subset: {dict(ds.sizes)}; downloading...", flush=True)
+    days = sorted(set(ds.time.dt.floor("D").values))
+    print(f"[fetch] subset: {dict(ds.sizes)}; downloading {len(days)} days...", flush=True)
 
-    # Only now use dask: one task per hour, fetched in parallel threads
-    ds = ds.chunk({"time": 1}).load()
+    # Download one day at a time: visible progress and bounded memory.
+    # Within a day, dask fetches the 24 hourly chunks in parallel threads.
+    parts = []
+    for i, day in enumerate(days, 1):
+        t_day = time.perf_counter()
+        tag = str(day)[:10]
+        part = ds.sel(time=slice(tag, f"{tag}T23:00")).chunk({"time": 1}).load()
+        parts.append(part)
+        elapsed = time.perf_counter() - t0
+        eta = (elapsed / i) * (len(days) - i)
+        print(f"[fetch] day {i}/{len(days)} {tag} done in {time.perf_counter() - t_day:.0f} s "
+              f"(elapsed {elapsed:.0f} s, ~{eta:.0f} s left)", flush=True)
+    ds = xr.concat(parts, dim="time")
+
     for var in ds.data_vars:
         units = ds[var].attrs.get("units")
         ds[var].attrs["units"] = UNIT_ALIASES.get(units, units)

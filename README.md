@@ -74,6 +74,29 @@ different resources; for tiny steps, grouping them into one pod would be faster.
 Memory per pod stays under 100 MB, so the 2 Gi limit could be lowered to fit
 more pods on a small node.
 
+
+### Real data: ERA5 reanalysis (Finland, 1–14 January 2024)
+
+Hourly 2 m temperature and 100 m wind from the public ARCO-ERA5 store,
+45 × 53 grid points at 0.25°, 336 hours. All 14 daily chunks passed the quality gate.
+
+| Week | Domain-mean capacity factor |
+|---|---|
+| 1–7 Jan | 0.19 |
+| 8–14 Jan | 0.29 |
+
+Local and k3s (Argo) runs produce identical capacity factors (0.189 and 0.289).
+
+| Step | Wall (s) | Peak RSS (MB) |
+|---|---|---|
+| fetch (download, day by day) | 410 | 247 |
+| produce + check + onepass + indicator | 0.8 | 120 |
+
+Capacity factors use a generic turbine power curve and are illustrative, not site estimates.
+The first fetch attempt built a dask graph for the whole 2 PB store and ran the server out of
+memory; opening lazily and downloading day by day keeps memory under 250 MB.
+
+
 ## Design notes
 
 - **Fail loudly, early.** The quality gate exits with code 2 and nothing downstream runs.
