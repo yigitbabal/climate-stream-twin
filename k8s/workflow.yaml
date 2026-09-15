@@ -63,7 +63,7 @@ spec:
             arguments: {parameters: [{name: cmd, value: indicator}]}
           - name: publish
             template: publish
-            depends: indicator.Succeeded
+            depends: report.Succeeded
           - name: prune
             template: cstwin
             depends: publish.Succeeded
@@ -132,6 +132,7 @@ spec:
             aws --endpoint-url $EP s3 mb s3://climate-bridge 2>/dev/null || true;
             aws --endpoint-url $EP s3 sync $RUN/outputs s3://climate-bridge/{{workflow.name}}/outputs &&
             aws --endpoint-url $EP s3 sync $RUN/metrics s3://climate-bridge/{{workflow.name}}/metrics &&
+            aws --endpoint-url $EP s3 cp $RUN/run_report.json s3://climate-bridge/{{workflow.name}}/run_report.json &&
             aws --endpoint-url $EP s3 ls --recursive s3://climate-bridge/{{workflow.name}}/
         volumeMounts:
           - {name: work, mountPath: /work}
