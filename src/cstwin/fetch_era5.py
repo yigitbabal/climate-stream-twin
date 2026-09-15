@@ -1,12 +1,14 @@
 """Fetch a small ERA5 subset from Google's public ARCO-ERA5 Zarr store (anonymous access).
 
-Run this on a machine with internet access (laptop), not inside CI.
-Requires: pip install .[fetch]
-Verify the store path/variable names against the ARCO-ERA5 README before first use:
-https://github.com/google-research/arco-era5
+Run on a machine with internet access (not in CI). Requires: pip install -e ".[fetch]"
+Store and variable names: https://github.com/google-research/arco-era5
+
+Note: ARCO-ERA5 stores one global field per hour per variable, so even a small
+region downloads whole-globe chunks. Keep the period short (1-2 weeks).
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import xarray as xr
@@ -17,21 +19,43 @@ RENAME = {
     "100m_u_component_of_wind": "u100",
     "100m_v_component_of_wind": "v100",
 }
-UNITS = {"t2m": "K", "u100": "m s-1", "v100": "m s-1"}
+# Only harmless spelling differences are normalised. Anything else is left as-is
+# so the quality gate in `check` catches it instead of this script hiding it.
+UNIT_ALIASES = {"m s**-1": "m s-1", "m/s": "m s-1"}
 
 
-def fetch(cfg, out: Path) -> Path:
+def fetch(cfg, out: Path, store: str = ARCO_STORE) -> Path:
     region, period = cfg["region"], cfg["period"]
-    ds = xr.open_zarr(ARCO_STORE, chunks=None, storage_options={"token": "anon"})
+    t0 = time.perf_counter()
+
+    print("[fetch] opening ARCO-ERA5 metadata (can take a minute)...", flush=True)
+    # chunks=None: lazy access without building a dask graph for the whole
+    # 2 PB store (hundreds of variables x ~750k hourly chunks), which is very slow.
+    ds = xr.open_zarr(store, chunks=None, storage_options={"token": "anon"})
+    print(f"[fetch] opened in {time.perf_counter() - t0:.0f} s; ERA5 available "
+          f"{ds.attrs.get('valid_time_start')} .. {ds.attrs.get('valid_time_stop')}", flush=True)
+
     ds = ds[list(RENAME)].rename(RENAME)
-    # ARCO-ERA5 uses 0..360 longitudes and descending latitudes
+    # ARCO-ERA5: latitude runs 90 -> -90, longitude 0 -> 360
     ds = ds.sel(
         time=slice(period["start"], f"{period['end']}T23:00"),
         latitude=slice(region["lat_max"], region["lat_min"]),
         longitude=slice(region["lon_min"] % 360, region["lon_max"] % 360),
     )
-    for var, unit in UNITS.items():
-        ds[var].attrs["units"] = unit
+    print(f"[fetch] subset: {dict(ds.sizes)}; downloading...", flush=True)
+
+    # Only now use dask: one task per hour, fetched in parallel threads
+    ds = ds.chunk({"time": 1}).load()
+    for var in ds.data_vars:
+        units = ds[var].attrs.get("units")
+        ds[var].attrs["units"] = UNIT_ALIASES.get(units, units)
+    # Zarr-specific encodings (compressor, chunks) break NetCDF writing
+    for name in ds.variables:
+        ds[name].encoding = {}
+    ds.attrs = {"source": "ARCO-ERA5 (Google Research)", "store": store}
+
     out.parent.mkdir(parents=True, exist_ok=True)
-    ds.load().to_netcdf(out)
+    ds.to_netcdf(out)
+    size_mb = out.stat().st_size / 1e6
+    print(f"[fetch] wrote {out} ({size_mb:.1f} MB) in {time.perf_counter() - t0:.0f} s")
     return out

@@ -6,7 +6,7 @@ region:            # Finland bounding box
   lon_max: 32.0
 period:
   start: "2024-01-01"
-  end:   "2024-01-31"
+  end:   "2024-01-14"
 
 paths:
   raw:       raw/era5_subset.nc

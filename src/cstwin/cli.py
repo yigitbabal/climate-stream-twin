@@ -20,6 +20,10 @@ def step_sample(cfg, args):
 
 def step_fetch(cfg, args):
     from .fetch_era5 import fetch
+    if args.start:
+        cfg.raw["period"]["start"] = args.start
+    if args.end:
+        cfg.raw["period"]["end"] = args.end
     fetch(cfg, cfg.path("raw"))
 
 
@@ -69,7 +73,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="step", required=True)
     s = sub.add_parser("sample"); s.add_argument("--days", type=int, default=14)
     s.add_argument("--corrupt", action="store_true")
-    sub.add_parser("fetch")
+    f = sub.add_parser("fetch")
+    f.add_argument("--start", help="override period.start, e.g. 2024-01-01")
+    f.add_argument("--end", help="override period.end, e.g. 2024-01-14")
     p = sub.add_parser("produce"); p.add_argument("--max-days", type=int, default=None)
     for name in ("check", "onepass", "indicator", "report"):
         sub.add_parser(name)
