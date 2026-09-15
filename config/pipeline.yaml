@@ -1,0 +1,32 @@
+# Central configuration. Paths are relative to --workdir (a PVC mount on k3s).
+region:            # Finland bounding box
+  lat_min: 59.5
+  lat_max: 70.5
+  lon_min: 19.0
+  lon_max: 32.0
+period:
+  start: "2024-01-01"
+  end:   "2024-01-31"
+
+paths:
+  raw:       raw/era5_subset.nc
+  stream:    stream          # daily chunks + .ready flags ("HPC scratch")
+  state:     state           # one-pass checkpoints
+  outputs:   outputs         # weekly statistics + indicators
+  metrics:   metrics         # per-step performance/energy JSON
+
+checks:
+  required_vars: [t2m, u100, v100]
+  units: {t2m: K, u100: "m s-1", v100: "m s-1"}
+  ranges: {t2m: [180.0, 340.0], u100: [-100.0, 100.0], v100: [-100.0, 100.0]}
+  steps_per_day: 24
+
+onepass:
+  window_days: 7               # statistic frequency (weekly, as in the Climate DT wind use case)
+  hist_bin_width: 0.5          # m/s
+  hist_max: 40.0               # m/s
+
+turbine:                       # generic 3-12-25 m/s power curve, rated power normalised to 1
+  cut_in: 3.0
+  rated: 12.0
+  cut_out: 25.0

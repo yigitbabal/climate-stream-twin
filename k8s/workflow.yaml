@@ -1,0 +1,137 @@
+# Argo Workflow DAG:  source -> produce -> check (quality gate) -> onepass -> indicator
+#                     -> publish (data bridge) -> prune (streaming window) -> report
+#
+#   argo submit -n cstwin k8s/workflow.yaml --watch
+#   argo submit -n cstwin k8s/workflow.yaml -p source=sample-corrupt --watch   # gate stops the run
+#   argo submit -n cstwin k8s/workflow.yaml -p source=era5 --watch             # needs scripts/load_raw.sh first
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: cstwin-
+  namespace: cstwin
+spec:
+  entrypoint: pipeline
+  serviceAccountName: cstwin-runner
+  podGC:
+    strategy: OnWorkflowSuccess
+  securityContext: {fsGroup: 1000}
+  arguments:
+    parameters:
+      - name: source            # sample | sample-corrupt | era5
+        value: sample
+      - name: image
+        value: cstwin:0.1.0
+      - name: keep-days
+        value: "3"
+  volumes:
+    - name: work
+      persistentVolumeClaim: {claimName: cstwin-work}
+    - name: config
+      configMap: {name: cstwin-config}
+
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: sample
+            template: cstwin
+            when: "'{{workflow.parameters.source}}' != 'era5'"
+            arguments:
+              parameters:
+                - name: cmd
+                  value: >-
+                    sample --days 14
+                    {{=workflow.parameters.source == 'sample-corrupt' ? '--corrupt' : ''}}
+          - name: stage-raw
+            template: stage-raw
+            when: "'{{workflow.parameters.source}}' == 'era5'"
+          - name: produce
+            template: cstwin
+            depends: "(sample.Succeeded || sample.Skipped) && (stage-raw.Succeeded || stage-raw.Skipped)"
+            arguments: {parameters: [{name: cmd, value: produce}]}
+          - name: check
+            template: cstwin
+            depends: produce.Succeeded
+            arguments: {parameters: [{name: cmd, value: check}]}
+          - name: onepass
+            template: cstwin-retry
+            depends: check.Succeeded
+            arguments: {parameters: [{name: cmd, value: onepass}]}
+          - name: indicator
+            template: cstwin
+            depends: onepass.Succeeded
+            arguments: {parameters: [{name: cmd, value: indicator}]}
+          - name: publish
+            template: publish
+            depends: indicator.Succeeded
+          - name: prune
+            template: cstwin
+            depends: publish.Succeeded
+            arguments:
+              parameters:
+                - name: cmd
+                  value: "prune --keep-days {{workflow.parameters.keep-days}}"
+          - name: report
+            template: cstwin
+            depends: indicator.Succeeded
+            arguments: {parameters: [{name: cmd, value: report}]}
+
+    # generic step: one subcommand of the cstwin CLI in its own pod
+    - name: cstwin
+      inputs:
+        parameters: [{name: cmd}]
+      container: &step
+        image: "{{workflow.parameters.image}}"
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c]
+        args:
+          - >-
+            cstwin --config /config/pipeline.yaml
+            --workdir /work/runs/{{workflow.name}}
+            {{inputs.parameters.cmd}}
+        resources:
+          requests: {cpu: 500m, memory: 512Mi}
+          limits: {memory: 2Gi}
+        volumeMounts:
+          - {name: work, mountPath: /work}
+          - {name: config, mountPath: /config}
+
+    # same step with retries: onepass resumes from its checkpoint after a pod failure
+    - name: cstwin-retry
+      inputs:
+        parameters: [{name: cmd}]
+      retryStrategy:
+        limit: "2"
+        retryPolicy: Always
+      container: *step
+
+    - name: stage-raw
+      container:
+        image: "{{workflow.parameters.image}}"
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c]
+        args:
+          - >-
+            mkdir -p /work/runs/{{workflow.name}}/raw &&
+            cp /work/shared/era5_subset.nc /work/runs/{{workflow.name}}/raw/era5_subset.nc
+        volumeMounts:
+          - {name: work, mountPath: /work}
+
+    - name: publish
+      container:
+        image: amazon/aws-cli:latest   # pin a version tag once it works
+        command: [sh, -c]
+        env:
+          - {name: AWS_ACCESS_KEY_ID, value: homelab}
+          - {name: AWS_SECRET_ACCESS_KEY, value: homelab}
+          - {name: AWS_DEFAULT_REGION, value: us-east-1}
+        args:
+          - >-
+            EP=http://seaweedfs-s3.cstwin.svc.cluster.local:8333;
+            RUN=/work/runs/{{workflow.name}};
+            aws --endpoint-url $EP s3 mb s3://climate-bridge 2>/dev/null || true;
+            aws --endpoint-url $EP s3 sync $RUN/outputs s3://climate-bridge/{{workflow.name}}/outputs &&
+            aws --endpoint-url $EP s3 sync $RUN/metrics s3://climate-bridge/{{workflow.name}}/metrics &&
+            aws --endpoint-url $EP s3 ls --recursive s3://climate-bridge/{{workflow.name}}/
+        volumeMounts:
+          - {name: work, mountPath: /work}

@@ -1,0 +1,13 @@
+# "HPC scratch": shared work volume for all pipeline pods.
+# k3s ships the local-path provisioner; RWO is fine on a single node because steps run sequentially.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cstwin-work
+  namespace: cstwin
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

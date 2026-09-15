@@ -1,0 +1,56 @@
+# "Data bridge": S3-compatible object storage that receives results after each run,
+# after which the stream chunks are pruned from scratch (the streaming window).
+# SeaweedFS is used because MinIO no longer publishes community container images.
+# Single-node, no auth: homelab only. Check the tag at https://github.com/seaweedfs/seaweedfs/releases
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bridge-data
+  namespace: cstwin
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  namespace: cstwin
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: seaweedfs}
+  template:
+    metadata:
+      labels: {app: seaweedfs}
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:4.47
+          args: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-volume.max=0"]
+          ports:
+            - {containerPort: 8333, name: s3}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 768Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          readinessProbe:
+            tcpSocket: {port: 8333}
+            initialDelaySeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: bridge-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-s3
+  namespace: cstwin
+spec:
+  selector: {app: seaweedfs}
+  ports:
+    - {name: s3, port: 8333, targetPort: 8333}

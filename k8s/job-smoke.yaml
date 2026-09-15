@@ -1,0 +1,37 @@
+# Plain Kubernetes Job: test the image + PVC before installing Argo.
+#   kubectl apply -f k8s/job-smoke.yaml && kubectl -n cstwin logs -f job/cstwin-smoke
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cstwin-smoke
+  namespace: cstwin
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: {fsGroup: 1000}
+      containers:
+        - name: cstwin
+          image: cstwin:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              W=/work/smoke
+              cstwin --config /config/pipeline.yaml --workdir $W sample --days 14
+              cstwin --config /config/pipeline.yaml --workdir $W run-all
+              cstwin --config /config/pipeline.yaml --workdir $W report
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 2Gi}
+          volumeMounts:
+            - {name: work, mountPath: /work}
+            - {name: config, mountPath: /config}
+      volumes:
+        - name: work
+          persistentVolumeClaim: {claimName: cstwin-work}
+        - name: config
+          configMap: {name: cstwin-config}

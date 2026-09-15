@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cstwin"
+version = "0.1.0"
+description = "Mini streaming climate-data consumer pipeline inspired by the DestinE Climate DT architecture"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "xarray>=2024.1",
+  "pandas>=2.1",
+  "netCDF4>=1.6",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+fetch = ["zarr>=2.17", "gcsfs>=2024.2", "dask>=2024.1"]
+energy = ["codecarbon>=2.3"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+cstwin = "cstwin.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

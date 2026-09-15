@@ -1,0 +1,31 @@
+# Service account for Argo workflow pods. The Argo executor needs to write
+# WorkflowTaskResults in the namespace where the workflow runs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cstwin-runner
+  namespace: cstwin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cstwin-executor
+  namespace: cstwin
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cstwin-executor
+  namespace: cstwin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cstwin-executor
+subjects:
+  - kind: ServiceAccount
+    name: cstwin-runner
+    namespace: cstwin

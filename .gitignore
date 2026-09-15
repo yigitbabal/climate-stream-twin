@@ -1,0 +1,7 @@
+work/
+ci-work/
+*.nc
+*.npz
+__pycache__/
+.pytest_cache/
+*.egg-info/
