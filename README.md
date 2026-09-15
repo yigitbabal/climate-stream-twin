@@ -1,4 +1,5 @@
 # climate-stream-twin (`cstwin`)
+![ci](https://github.com/yigitbabal/climate-stream-twin/actions/workflows/ci.yml/badge.svg)
 
 A small, containerized **streaming climate-data consumer pipeline** running on Kubernetes (k3s).
 It is a scaled-down exercise inspired by the data-consumer side of the Destination Earth
@@ -56,14 +57,22 @@ argo submit -n cstwin k8s/workflow.yaml -p source=era5 --watch
 
 ## Results
 
-<!-- Fill in after running: wall time, peak memory, energy per step, local vs k3s. -->
+Synthetic test data: 14 days of hourly data on a 12 × 14 grid.
+Local = plain Python on the server; k3s = Argo Workflows, one pod per step.
 
-| Step | Local wall (s) | k3s wall (s) | Peak RSS (MB) | Energy (kWh) |
-|---|---|---|---|---|
-| produce | | | | |
-| check | | | | |
-| onepass | | | | |
-| indicator | | | | |
+| Step | Local wall (s) | k3s wall (s) | Peak RSS in pod (MB) |
+|---|---|---|---|
+| produce | 0.175 | 0.182 | 97 |
+| check | 0.150 | 0.174 | 95 |
+| onepass | 0.157 | 0.967 | 96 |
+| indicator | 0.026 | 0.049 | 96 |
+| **Whole workflow** | < 1 | 91 (1.4 s of actual compute) | |
+
+**Takeaway:** on small data, starting a pod for each step dominates run time
+(about 90 of 91 seconds). Per-step pods pay off when steps are heavy or need
+different resources; for tiny steps, grouping them into one pod would be faster.
+Memory per pod stays under 100 MB, so the 2 Gi limit could be lowered to fit
+more pods on a small node.
 
 ## Design notes
 
@@ -82,6 +91,7 @@ argo submit -n cstwin k8s/workflow.yaml -p source=era5 --watch
 - [ ] Per-day fan-out in Argo (check/consume each chunk as it arrives)
 - [ ] Self-hosted GitHub runner on k3s (Actions Runner Controller) for cluster-level e2e tests
 - [ ] Benchmark history dashboard on GitHub Pages; regrid to HEALPix; small AI emulator step
+- [ ] Enable energy estimates per step (CodeCarbon, `pip install .[energy]`)
 
 ## Layout
 
