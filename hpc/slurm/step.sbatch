@@ -1,16 +1,19 @@
 #!/bin/bash
 # One pipeline step = one Slurm job, running the same container image as on Kubernetes.
-# Submitted by submit.sh as: sbatch ... step.sbatch <subcommand> [args], with RUN_ID exported
-#SBATCH --job-name=cstwin
+# Submitted by submit.sh as: sbatch --account=... --partition=... step.sbatch <subcommand> [args]
+# (--account and --partition are given on the sbatch command line so no project number is hard-coded.)
+#SBATCH --job-name=cstwin-step
+#SBATCH --time=00:10:00
+#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=1G
-#SBATCH --time=00:15:00
+#SBATCH --mem=512M                 # measured peak ~120 MB per step; keep request modest
 #SBATCH --output=%x_%j.out
 
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: step.sbatch <cstwin subcommand> [args]"; exit 1; }
 : "${RUN_ID:?RUN_ID not set}" "${SIF:?}" "${CONFIG:?}" "${SCRATCH_BASE:?}"
+command -v apptainer >/dev/null || module load apptainer
 
 WORK="$SCRATCH_BASE/runs"
 mkdir -p "$WORK/$RUN_ID"

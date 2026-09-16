@@ -8,3 +8,4 @@ __pycache__/
 .venv/
 bad-work/
 hpc/slurm/env.local.sh
+hpc/slurm/env.local.sh
