@@ -133,14 +133,6 @@ runs in `small`; `submit.sh` refuses the test + chain combination.
 - **Metrics per pod.** Each step records wall time and peak RSS; install `.[energy]` for CodeCarbon estimates.
   (In `run-all` all steps share one process, so peak RSS is cumulative there.)
 
-## Roadmap
-
-- [ ] Run the same steps on an HPC system via Slurm + Apptainer and compare against k3s
-- [ ] Swap the in-house one-pass code for the DestinE `one_pass` package
-- [ ] Per-day fan-out in Argo (check/consume each chunk as it arrives)
-- [ ] Self-hosted GitHub runner on k3s (Actions Runner Controller) for cluster-level e2e tests
-- [ ] Benchmark history dashboard on GitHub Pages; regrid to HEALPix; small AI emulator step
-- [ ] Enable energy estimates per step (CodeCarbon, `pip install .[energy]`)
 
 ## Layout
 
