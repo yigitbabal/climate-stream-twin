@@ -106,9 +106,6 @@ Same image (pulled from GHCR into a `.sif` file) and same `cstwin` steps, run on
 | single (whole pipeline in one job) | 1 | 6 s | 0.189, 0.289 |
 | chain (one job per step, `--dependency=afterok`) | 5 | 30 s | 0.189, 0.289 |
 
-Peak memory per step (Slurm `MaxRSS`, including the container runtime): 185–296 MB,
-against a 512 MB request.
-
 **Same results everywhere:** local, Kubernetes (Argo) and Slurm (both modes) produce
 identical capacity factors on the same ERA5 input.
 
