@@ -112,6 +112,9 @@ against a 512 MB request.
 **Same results everywhere:** local, Kubernetes (Argo) and Slurm (both modes) produce
 identical capacity factors on the same ERA5 input.
 
+**Quality gate:** with a corrupted input, `check` fails and Slurm cancels the remaining
+jobs (`CANCELLED`, 0 s runtime), the same behaviour as the Argo workflow.
+
 **Overhead:** each job itself runs in about 3 s; in chain mode, the scheduler adds about
 3 s between jobs. For steps this small, a single job is the efficient choice. Chaining
 pays off when steps are long or need different resources. On Kubernetes, pod start-up
