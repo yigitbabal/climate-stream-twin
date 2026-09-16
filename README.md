@@ -96,6 +96,29 @@ Capacity factors use a generic turbine power curve and are illustrative, not sit
 The first fetch attempt built a dask graph for the whole 2 PB store and ran the server out of
 memory; opening lazily and downloading day by day keeps memory under 250 MB.
 
+### HPC: Slurm + Apptainer on CSC Roihu
+
+Same image (pulled from GHCR into a `.sif` file) and same `cstwin` steps, run on Roihu's
+`small` partition. Scripts and instructions: [`hpc/`](hpc/README.md).
+
+| Mode | Jobs | First submit → last end | Capacity factors |
+|---|---|---|---|
+| single (whole pipeline in one job) | 1 | 6 s | 0.189, 0.289 |
+| chain (one job per step, `--dependency=afterok`) | 5 | 30 s | 0.189, 0.289 |
+
+Peak memory per step (Slurm `MaxRSS`, including the container runtime): 185–296 MB,
+against a 512 MB request.
+
+**Same results everywhere:** local, Kubernetes (Argo) and Slurm (both modes) produce
+identical capacity factors on the same ERA5 input.
+
+**Overhead:** each job itself runs in about 3 s; in chain mode, the scheduler adds about
+3 s between jobs. For steps this small, a single job is the efficient choice. Chaining
+pays off when steps are long or need different resources. On Kubernetes, pod start-up
+on a small node added about 10 s per step.
+
+**Note:** CSC's `test` partition allows only 2 submitted jobs per user, so chain mode
+runs in `small`; `submit.sh` refuses the test + chain combination.
 
 ## Design notes
 
